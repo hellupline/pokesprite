@@ -98,6 +98,12 @@ _ = argparser.add_argument(
     action="store",
     type=str,
 )
+_ = argparser.add_argument(
+    "--filename",
+    help="Filename of any image to display as ANSI art.",
+    action="store",
+    type=str,
+)
 
 
 @dataclass()
@@ -112,6 +118,7 @@ class Namespace:
         large (bool): Whether to use large sprites.
         shiny (bool): Whether to use shiny sprites.
         name (str | None): The name of the namespace.
+        filename (str | None): The filename associated with the namespace.
 
     """
 
@@ -121,6 +128,7 @@ class Namespace:
     large: bool = False
     shiny: bool = False
     name: str | None = None
+    filename: str | None = None
 
 
 def main() -> None:
@@ -153,6 +161,14 @@ def main() -> None:
             size="large" if args.large else "small",
             color="shiny" if args.shiny else "regular",
         )
+    elif args.filename:
+        with Path(args.filename).open(mode="rb") as f:
+            image_data = BytesIO(f.read())
+        image_array = get_image_array(image_data)
+        if args.large:
+            print(array_to_ansi_art_large(image_array))  # noqa: T201
+        else:
+            print(array_to_ansi_art_small(image_array))  # noqa: T201
     else:
         msg = "No action specified. Use --help to see available options."
         raise ValueError(msg)

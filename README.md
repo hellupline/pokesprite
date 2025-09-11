@@ -10,6 +10,7 @@ Show Pokémon sprites as ANSI art in your terminal.
 - List all available Pokémon forms.
 - Display a random Pokémon.
 - Show the name of the Pokémon alongside its sprite.
+- Display any image file as ANSI art.
 
 ## Installation
 
@@ -35,11 +36,13 @@ pokesprite --help
 - `--large` — Display the large version of the sprite (default: small).
 - `--shiny` — Display the shiny version of the sprite (default: regular).
 - `--name <form>` — Display a specific Pokémon (e.g. `ampharos` or `ampharos-mega`).
+- `--filename <image>` — Display any image file as ANSI art.
 
 ### Example
 
 ```sh
 pokesprite --name ampharos --large --shiny --show-name
+pokesprite --filename ./my_image.png --large
 ```
 
 ## Development
