@@ -1,6 +1,7 @@
 import importlib.resources
 import json
 import random
+import sys
 from argparse import ArgumentParser
 from collections.abc import Iterable
 from collections.abc import Iterator
@@ -148,30 +149,33 @@ def main() -> None:
     args = argparser.parse_args(namespace=Namespace())
     if args.list:
         show_pokemon_list()
-    elif args.random:
+        return
+    if args.random:
         show_random_pokemon(
             args.show_name,
             size="large" if args.large else "small",
             color="shiny" if args.shiny else "regular",
         )
-    elif args.name:
+        return
+    if args.name:
         show_pokemon(
             args.name,
             args.show_name,
             size="large" if args.large else "small",
             color="shiny" if args.shiny else "regular",
         )
-    elif args.filename:
+        return
+    if args.filename:
         with Path(args.filename).open(mode="rb") as f:
             image_data = BytesIO(f.read())
         image_array = get_image_array(image_data)
         if args.large:
             print(array_to_ansi_art_large(image_array))  # noqa: T201
-        else:
-            print(array_to_ansi_art_small(image_array))  # noqa: T201
-    else:
-        msg = "No action specified. Use --help to see available options."
-        raise ValueError(msg)
+            return
+        print(array_to_ansi_art_small(image_array))  # noqa: T201
+        return
+    argparser.print_help()
+    sys.exit(1)
 
 
 def show_pokemon_list() -> None:
