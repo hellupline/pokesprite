@@ -226,7 +226,7 @@ def show_pokemon(
         print(f.read())  # noqa: T201
 
 
-def generate_ansi_files() -> None:
+def generate_sprite_ansi_files() -> None:
     """
     Extract Pokémon sprite images from a ZIP archive.
 
@@ -258,7 +258,7 @@ def generate_ansi_files() -> None:
             txt_small_directory = _mkdir(TXT_SMALL_PATH / color)
             txt_large_directory = _mkdir(TXT_LARGE_PATH / color)
             for form in forms:
-                generate_ansi_file(
+                generate_sprite_ansi_file(
                     zdirectory / f"{form}.png",
                     directory / f"{form}.png",
                     txt_small_directory / f"{form}.txt",
@@ -377,7 +377,7 @@ def get_sprite_data(zpath: ZipPath, path: Path) -> IO[bytes]:
     return BytesIO(img_data)
 
 
-def generate_ansi_file(
+def generate_sprite_ansi_file(
     zipped_filename: ZipPath,
     sprite_filename: Path,
     txt_filename_small: Path,
