@@ -521,7 +521,7 @@ def array_to_ansi_art_small(array: ImageArray) -> str:
     for upper_row, lower_row in rows_pair(array):
         for upper_pixel, lower_pixel in zip(upper_row, lower_row, strict=False):
             result += pixel_pair_to_ansi_block(upper_pixel, lower_pixel)
-        result += "\n"
+        result += ANSI_RESET_CODE + "\n"
     return result + ANSI_RESET_CODE
 
 
@@ -550,7 +550,7 @@ def array_to_ansi_art_large(array: ImageArray) -> str:
                 result += WIDE_EMPTY_BLOCK
             else:
                 result += ansi_color_code(r, g, b) + SOLID_BLOCK
-        result += "\n"
+        result += ANSI_RESET_CODE + "\n"
     return result + ANSI_RESET_CODE
 
 
