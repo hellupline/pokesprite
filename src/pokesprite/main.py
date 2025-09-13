@@ -40,6 +40,8 @@ LOWER_BLOCK = "▄"
 EMPTY_BLOCK = " "
 SOLID_BLOCK = "██"
 WIDE_EMPTY_BLOCK = "  "
+TRANSPARENCY_THRESHOLD = 128
+
 REPO_URL = "https://github.com/msikma/pokesprite/archive/refs/heads/master.zip"
 
 
@@ -436,7 +438,10 @@ def generate_sprite_ansi_file(
             _ = f.write(txt_large)
 
 
-def get_image_array(buf: IO[bytes]) -> ImageArray:
+def get_image_array(
+    buf: IO[bytes],
+    transparency_color: tuple[int, int, int] | None = None,
+) -> ImageArray:
     """
     Load an image from a byte buffer.
 
@@ -444,63 +449,87 @@ def get_image_array(buf: IO[bytes]) -> ImageArray:
 
     Args:
         buf (IO[bytes]): A buffer containing image data in bytes.
+        transparency_color (tuple[int, int, int] | None): RGB color to set as transparent.
+            If None, no color is made transparent.
 
     Returns:
         ImageArray: The processed image as a NumPy array.
 
     """
-    img = Image.open(buf).convert("RGBA")
-    img = fix_alpha_channel(img)
-    img = trim_image(img)
-    return np.array(img)
+    array = np.array(Image.open(buf).convert("RGBA"))
+    if transparency_color is not None:
+        array = set_transparent_color(array, color=transparency_color)
+    array = fix_alpha_channel(array)
+    array = trim_array(array)
+    return array  # noqa: RET504
 
 
-def fix_alpha_channel(image: Image.Image) -> Image.Image:
+def set_transparent_color(
+    array: ImageArray,
+    color: tuple[int, int, int],
+) -> ImageArray:
     """
-    Ensure the image has a proper alpha channel.
-
-    By creating a new RGBA image and pasting the original image onto it using its alpha channel as a mask.
+    Set the alpha channel to zero for all pixels in the image array that match the given RGB color.
 
     Args:
-        image (Image.Image): The input PIL image.
+        array (ImageArray): Input image array with shape (H, W, 4).
+        color (tuple[int, int, int]): RGB color to be made transparent.
 
     Returns:
-        Image.Image: A new RGBA image with the corrected alpha channel.
+        ImageArray: Modified image array with specified color made transparent.
 
     """
-    result = Image.new("RGBA", image.size)
-    result.paste(image, mask=image.getchannel("A"))
-    return result
+    mask = np.all(array[:, :, :3] == color, axis=-1)  # pyright: ignore[reportAny]
+    array[mask, 3] = 0
+    return array
 
 
-def trim_image(image: Image.Image, padding: int = 1) -> Image.Image:
+def fix_alpha_channel(
+    array: ImageArray,
+    transparency_threshold: int = TRANSPARENCY_THRESHOLD,
+) -> ImageArray:
     """
-    Trim the input image to its non-transparent bounding box, with optional padding.
-
-    The function finds the bounding box of non-transparent pixels and crops the image
-    to that region, expanding the box by the specified padding. If no bounding box is
-    found (image is fully transparent), the original image is returned.
+    Set alpha to 0 if below threshold, 255 if above.
 
     Args:
-        image (Image.Image): The input PIL image to be trimmed.
+        array (ImageArray): Input image array with shape (H, W, 4).
+        transparency_threshold (int): Alpha threshold for transparency.
+
+    Returns:
+        ImageArray: Modified image array with fixed alpha channel.
+
+    """
+    mask = array[:, :, 3] < transparency_threshold
+    array[:, :, 3] = np.where(mask, 0, 255)
+    return array
+
+
+def trim_array(
+    array: ImageArray,
+    transparency_threshold: int = TRANSPARENCY_THRESHOLD,
+    padding: int = 1,
+) -> ImageArray:
+    """
+    Crops image to bounding box of pixels above alpha threshold, with optional padding.
+
+    Args:
+        array (ImageArray): Input image array with shape (H, W, 4).
+        transparency_threshold (int): Minimum alpha value to consider a pixel as non-transparent.
         padding (int, optional): Number of pixels to pad around the bounding box. Defaults to 1.
 
     Returns:
-        Image.Image: The cropped image, or the original image if no bounding box is found.
+        ImageArray: Cropped image array.
 
     """
-    bbox = image.getbbox(alpha_only=False)
-    if bbox is not None:
-        width, height = image.size
-        left, upper, right, lower = bbox
-        bbox = (
-            max(0, left - padding),
-            max(0, upper - padding),
-            min(width, right + padding),
-            min(height, lower + padding),
-        )
-        return image.crop(bbox)
-    return image
+    mask = array[:, :, 3] > transparency_threshold
+    ys, xs = np.where(mask)
+    y_min, y_max = ys.min(), ys.max()  # pyright: ignore[reportAny]
+    x_min, x_max = xs.min(), xs.max()  # pyright: ignore[reportAny]
+    upper = max(y_min - padding, 0)  # pyright: ignore[reportAny]
+    left = max(x_min - padding, 0)  # pyright: ignore[reportAny]
+    lower = min(array.shape[0], y_max + padding)  # pyright: ignore[reportAny]
+    right = min(array.shape[1], x_max + padding)  # pyright: ignore[reportAny]
+    return array[upper:lower, left:right]
 
 
 def array_to_ansi_art_small(array: ImageArray) -> str:
