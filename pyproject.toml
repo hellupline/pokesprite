@@ -1,6 +1,6 @@
 [project]
 name = "pokesprite"
-version = "0.2.0"
+version = "0.3.0"
 description = "show pokemon sprites on your terminal"
 readme = "README.md"
 authors = [
