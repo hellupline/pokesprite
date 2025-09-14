@@ -43,8 +43,8 @@ jobs:
             uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
             uv-${{ runner.os }}
 
-      - name: Generate sprite ansi files
-        run: ./generate-sprite-ansi-files.sh
+      - name: Generate pokemon sprite ansi files
+        run: ./generate-pokemon-sprite-ansi-files.sh
 
       - name: Build the distribution packages
         run: uv build
