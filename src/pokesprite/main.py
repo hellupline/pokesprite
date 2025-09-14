@@ -107,6 +107,12 @@ _ = argparser.add_argument(
     action="store",
     type=str,
 )
+_ = argparser.add_argument(
+    "--transparency-color-hex",
+    help="Set a specific RGB color as transparent in the image (format: AABBCC).",
+    action="store",
+    type=str,
+)
 
 
 @dataclass()
@@ -122,6 +128,7 @@ class Namespace:
         shiny (bool): Whether to use shiny sprites.
         name (str | None): The name of the namespace.
         filename (str | None): The filename associated with the namespace.
+        transparency_color (str | None): The transparency color in hex format.
 
     """
 
@@ -132,6 +139,7 @@ class Namespace:
     shiny: bool = False
     name: str | None = None
     filename: str | None = None
+    transparency_color_hex: str | None = None
 
 
 def main() -> None:
@@ -168,16 +176,37 @@ def main() -> None:
         )
         return
     if args.filename:
-        with Path(args.filename).open(mode="rb") as f:
-            image_data = BytesIO(f.read())
-        image_array = get_image_array(image_data)
-        if args.large:
-            print(array_to_ansi_art_large(image_array))  # noqa: T201
-            return
-        print(array_to_ansi_art_small(image_array))  # noqa: T201
+        show_custom_image(
+            Path(args.filename),
+            color_hex=args.transparency_color_hex,
+            large=args.large,
+        )
         return
     argparser.print_help()
     sys.exit(1)
+
+
+def show_custom_image(
+    path: Path,
+    color_hex: str | None = None,
+    large: bool = False,  # noqa: FBT001, FBT002
+) -> None:
+    transparency_color = None
+    if color_hex:
+        try:
+            transparency_color = parse_color_hex(color_hex)
+        except ValueError as e:
+            (msg,) = e.args  # pyright: ignore[reportAny]
+            print(msg)  # noqa: T201  # pyright: ignore[reportAny]
+            sys.exit(1)
+    with path.open(mode="rb") as f:
+        image_data = BytesIO(f.read())
+    image_array = get_image_array(image_data, transparency_color=transparency_color)
+    if large:
+        print(array_to_ansi_art_large(image_array), end="")  # noqa: T201
+        return
+    print(array_to_ansi_art_small(image_array), end="")  # noqa: T201
+    return
 
 
 def show_pokemon_list() -> None:
@@ -507,15 +536,13 @@ def fix_alpha_channel(
 def trim_array(
     array: ImageArray,
     transparency_threshold: int = TRANSPARENCY_THRESHOLD,
-    padding: int = 1,
 ) -> ImageArray:
     """
-    Crops image to bounding box of pixels above alpha threshold, with optional padding.
+    Crops image to bounding box of pixels above alpha threshold.
 
     Args:
         array (ImageArray): Input image array with shape (H, W, 4).
         transparency_threshold (int): Minimum alpha value to consider a pixel as non-transparent.
-        padding (int, optional): Number of pixels to pad around the bounding box. Defaults to 1.
 
     Returns:
         ImageArray: Cropped image array.
@@ -525,10 +552,10 @@ def trim_array(
     ys, xs = np.where(mask)
     y_min, y_max = ys.min(), ys.max()  # pyright: ignore[reportAny]
     x_min, x_max = xs.min(), xs.max()  # pyright: ignore[reportAny]
-    upper = max(y_min - padding, 0)  # pyright: ignore[reportAny]
-    left = max(x_min - padding, 0)  # pyright: ignore[reportAny]
-    lower = min(array.shape[0], y_max + padding)  # pyright: ignore[reportAny]
-    right = min(array.shape[1], x_max + padding)  # pyright: ignore[reportAny]
+    upper = max(y_min, 0)  # pyright: ignore[reportAny]
+    left = max(x_min, 0)  # pyright: ignore[reportAny]
+    lower = min(array.shape[0], y_max)  # pyright: ignore[reportAny]
+    right = min(array.shape[1], x_max)  # pyright: ignore[reportAny]
     return array[upper:lower, left:right]
 
 
@@ -650,6 +677,29 @@ def ansi_color_code(r: np.uint8, g: np.uint8, b: np.uint8, background: bool = Fa
 
     """
     return f"\033[{48 if background else 38};2;{r};{g};{b}m"
+
+
+def parse_color_hex(value: str) -> tuple[int, int, int]:
+    """
+    Parse a hex color string in the format 'AABBCC' and return its RGB components.
+
+    Args:
+        value (str): A string representing a hex color, e.g., 'AABBCC'.
+
+    Returns:
+        tuple[int, int, int]: A tuple containing the red, green, and blue components as integers.
+
+    Raises:
+        ValueError: If the input string is not in the correct format.
+
+    """
+    if len(value) != 6:  # noqa: PLR2004
+        msg = "Color must be in format AABBCC"
+        raise ValueError(msg)
+    r = int(value[0:2], base=16)
+    g = int(value[2:4], base=16)
+    b = int(value[4:6], base=16)
+    return (r, g, b)
 
 
 if __name__ == "__main__":
