@@ -30,8 +30,7 @@ def get_image_array(buf: IO[bytes], transparency_color: Color | None = None) -> 
     if transparency_color is not None:
         array = set_transparent_color(array, color=transparency_color)
     array = fix_alpha_channel(array)
-    array = trim_array(array)
-    return array  # noqa: RET504
+    return trim_array(array)
 
 
 def set_transparent_color(array: ImageArray, color: Color) -> ImageArray:
@@ -86,6 +85,6 @@ def trim_array(array: ImageArray, threshold: int = TRANSPARENCY_THRESHOLD) -> Im
     x_min, x_max = xs.min(), xs.max()  # pyright: ignore[reportAny]
     upper = max(y_min, 0)  # pyright: ignore[reportAny]
     left = max(x_min, 0)  # pyright: ignore[reportAny]
-    lower = min(array.shape[0], y_max)  # pyright: ignore[reportAny]
-    right = min(array.shape[1], x_max)  # pyright: ignore[reportAny]
+    lower = min(array.shape[0], y_max) + 1  # pyright: ignore[reportAny]
+    right = min(array.shape[1], x_max) + 1  # pyright: ignore[reportAny]
     return array[upper:lower, left:right]

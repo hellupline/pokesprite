@@ -108,7 +108,7 @@ def show_pokemon_sprite(
     if show_name:
         print(form)  # noqa: T201
     with (POKEMON_TXT_PATH / size / color / f"{form}.txt").open(mode="r", encoding="utf-8") as f:
-        print(f.read())  # noqa: T201
+        print(f.read(), end="")  # noqa: T201
 
 
 def generate_pokemon_sprite_ansi_files() -> None:
