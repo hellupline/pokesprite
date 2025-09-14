@@ -9,9 +9,14 @@ ImageArray = np.ndarray[tuple[int, int, int], np.dtype[np.uint8]]
 ImageRowArray = np.ndarray[tuple[int, int], np.dtype[np.uint8]]
 ImagePixelArray = np.ndarray[tuple[int], np.dtype[np.uint8]]
 Color = tuple[int, int, int]
+Box = tuple[int, int, int, int]
 
 
-def get_image_array(buf: IO[bytes], transparency_color: Color | None = None) -> ImageArray:
+def get_image_array(
+    buf: IO[bytes],
+    transparency_color: Color | None = None,
+    box_area: Box | None = None,
+) -> ImageArray:
     """
     Load an image from a byte buffer.
 
@@ -19,8 +24,8 @@ def get_image_array(buf: IO[bytes], transparency_color: Color | None = None) -> 
 
     Args:
         buf (IO[bytes]): A buffer containing image data in bytes.
-        transparency_color (tuple[int, int, int] | None): RGB color to set as transparent.
-            If None, no color is made transparent.
+        transparency_color (Color | None): Optional RGB color to set as transparent.
+        box_area (Box | None): Optional box area (left, upper, right, lower)
 
     Returns:
         ImageArray: The processed image as a NumPy array.
@@ -29,6 +34,8 @@ def get_image_array(buf: IO[bytes], transparency_color: Color | None = None) -> 
     array = np.array(Image.open(buf).convert("RGBA"))
     if transparency_color is not None:
         array = set_transparent_color(array, color=transparency_color)
+    if box_area is not None:
+        array = crop_array(array, box_area=box_area)
     array = fix_alpha_channel(array)
     return trim_array(array)
 
@@ -48,6 +55,22 @@ def set_transparent_color(array: ImageArray, color: Color) -> ImageArray:
     mask = np.all(array[:, :, :3] == color, axis=-1)  # pyright: ignore[reportAny]
     array[mask, 3] = 0
     return array
+
+
+def crop_array(array: ImageArray, box_area: Box) -> ImageArray:
+    """
+    Crops image to the specified box area.
+
+    Args:
+        array (ImageArray): The input image array to crop.
+        box_area (Box): A tuple (left, upper, right, lower) specifying the crop rectangle.
+
+    Returns:
+        ImageArray: The cropped image array.
+
+    """
+    left, upper, right, lower = box_area
+    return array[upper:lower, left:right]
 
 
 def fix_alpha_channel(array: ImageArray, threshold: int = TRANSPARENCY_THRESHOLD) -> ImageArray:

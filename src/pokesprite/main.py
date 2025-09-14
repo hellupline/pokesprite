@@ -8,6 +8,8 @@ import numpy as np
 
 from pokesprite.ansi import array_to_ansi_art_large
 from pokesprite.ansi import array_to_ansi_art_small
+from pokesprite.image import Box
+from pokesprite.image import Color
 from pokesprite.image import get_image_array
 from pokesprite.pokemon import show_pokemon_list
 from pokesprite.pokemon import show_pokemon_sprite
@@ -71,6 +73,12 @@ _ = argparser.add_argument(
     action="store",
     type=str,
 )
+_ = argparser.add_argument(
+    "--box-area",
+    help="Crop the image using the given left, upper, right, and lower pixel coordinates (format: LxUxRxD).",
+    action="store",
+    type=str,
+)
 
 
 @dataclass()
@@ -86,7 +94,8 @@ class Namespace:
         large (bool): Whether to use large sprites.
         shiny (bool): Whether to use shiny sprites.
         filename (str | None): The filename associated with the namespace.
-        transparency_color (str | None): The transparency color in hex format.
+        transparency_color (str | None): The transparency color in AABBCC format.
+        box_area (str | None): The area dimensions in LxUxRxD format.
 
     """
 
@@ -98,6 +107,7 @@ class Namespace:
     shiny: bool = False
     filename: str | None = None
     transparency_color_hex: str | None = None
+    box_area: str | None = None
 
 
 def main() -> None:
@@ -137,7 +147,8 @@ def main() -> None:
     if args.filename:
         show_custom_image(
             Path(args.filename),
-            color_hex=args.transparency_color_hex,
+            transparency_color_hex=args.transparency_color_hex,
+            box_area_txt=args.box_area,
             large=args.large,
         )
         return
@@ -147,20 +158,35 @@ def main() -> None:
 
 def show_custom_image(
     path: Path,
-    color_hex: str | None = None,
+    transparency_color_hex: str | None = None,
+    box_area_txt: str | None = None,
     large: bool = False,  # noqa: FBT001, FBT002
 ) -> None:
-    transparency_color = None
-    if color_hex:
-        try:
-            transparency_color = parse_color_hex(color_hex)
-        except ValueError as e:
-            (msg,) = e.args  # pyright: ignore[reportAny]
-            print(msg)  # noqa: T201  # pyright: ignore[reportAny]
-            sys.exit(1)
+    """
+    Display a custom image in the terminal as ANSI art.
+
+    Args:
+        path (Path): Path to the image file.
+        transparency_color_hex (str | None): Optional hex color string (AABBCC) for transparency.
+        box_area_txt (str | None): Optional crop area string in format 'LxUxRxD'.
+        large (bool): If True, displays the image in large ANSI art; otherwise, small.
+
+    Returns:
+        None
+
+    Exits:
+        If color or crop parsing fails, prints an error and exits the program.
+
+    """
+    transparency_color = parse_color_hex_or_quit(transparency_color_hex)
+    box_area = parse_box_area_or_quit(box_area_txt)
     with path.open(mode="rb") as f:
         image_data = BytesIO(f.read())
-    image_array = get_image_array(image_data, transparency_color=transparency_color)
+    image_array = get_image_array(
+        image_data,
+        transparency_color=transparency_color,
+        box_area=box_area,
+    )
     if large:
         print(array_to_ansi_art_large(image_array), end="")  # noqa: T201
         return
@@ -168,27 +194,53 @@ def show_custom_image(
     return
 
 
-def parse_color_hex(value: str) -> tuple[int, int, int]:
+def parse_color_hex_or_quit(value: str | None) -> Color | None:
     """
     Parse a hex color string in the format 'AABBCC' and return its RGB components.
 
     Args:
-        value (str): A string representing a hex color, e.g., 'AABBCC'.
+        value (str | None): The hexadecimal color string to parse, or None, e.g., 'AABBCC'.
 
     Returns:
-        tuple[int, int, int]: A tuple containing the red, green, and blue components as integers.
+        Color | None: A tuple (r, g, b) if parsing succeeds, or None if value is None.
 
-    Raises:
-        ValueError: If the input string is not in the correct format.
+    Exits:
+        If the value is not 6 characters long, prints an error and exits the program.
 
     """
+    if value is None:
+        return None
     if len(value) != 6:  # noqa: PLR2004
-        msg = "Color must be in format AABBCC"
-        raise ValueError(msg)
+        print("Color must be in format AABBCC")  # noqa: T201
+        sys.exit(1)
     r = int(value[0:2], base=16)
     g = int(value[2:4], base=16)
     b = int(value[4:6], base=16)
     return (r, g, b)
+
+
+def parse_box_area_or_quit(value: str | None) -> Box | None:
+    """
+    Parse a area string in the format 'LxUxRxD' into a tuple of four integers.
+
+    Args:
+        value (str | None): The area string to parse, or None.
+
+    Returns:
+        Box | None: A tuple (left, upper, right, lower) if parsing succeeds, or None if value is None.
+
+    Exits:
+        If the value is not in the correct format, prints an error and exits the program.
+
+    """
+    if value is None:
+        return None
+    try:
+        left, upper, right, lower = [int(v) for v in value.split("x")]
+    except ValueError:
+        print("Area must be in format LxUxRxD")  # noqa: T201
+        sys.exit(1)
+    return (left, upper, right, lower)
 
 
 if __name__ == "__main__":
