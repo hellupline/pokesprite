@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from itertools import zip_longest
 
 import numpy as np
 
@@ -30,6 +31,8 @@ def array_to_ansi_art_small(array: ImageArray) -> str:
     """
     result = ""
     for upper_row, lower_row in rows_pair(array):
+        if lower_row is None:
+            lower_row: ImageRowArray | None = np.zeros_like(upper_row)  # noqa: PLW2901
         for upper_pixel, lower_pixel in zip(upper_row, lower_row, strict=False):
             result += pixel_pair_to_ansi_block(upper_pixel, lower_pixel)
         result += ANSI_RESET_CODE + "\n"
@@ -65,23 +68,23 @@ def array_to_ansi_art_large(array: ImageArray) -> str:
     return result + ANSI_RESET_CODE
 
 
-def rows_pair(arr: ImageArray) -> Iterable[tuple[ImageRowArray, ImageRowArray]]:
+def rows_pair(array: ImageArray) -> Iterable[tuple[ImageRowArray, ImageRowArray | None]]:
     """
     Group the input array of image rows into pairs.
 
     Args:
-        arr (ImageArray): An iterable of image row arrays.
+        array (ImageArray): An iterable of image row arrays.
 
     Returns:
-        Iterable[tuple[ImageRowArray, ImageRowArray]]: An iterable of tuples,
+        Iterable[tuple[ImageRowArray, ImageRowArray | None]]: An iterable of tuples,
         each containing two consecutive image row arrays.
 
     Notes:
         - If the number of rows is odd, the last row will be omitted.
-        - Uses zip and iter to efficiently pair rows without creating intermediate lists.
+        - Uses zip_longest and iter to efficiently pair rows without creating intermediate lists.
 
     """
-    return zip(*([iter(arr)] * 2), strict=False)
+    return zip_longest(*([iter(array)] * 2), fillvalue=None)  # pyright: ignore[reportReturnType]
 
 
 def pixel_pair_to_ansi_block(upper_pixel: ImagePixelArray, lower_pixel: ImagePixelArray) -> str:
