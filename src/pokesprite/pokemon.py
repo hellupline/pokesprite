@@ -12,8 +12,9 @@ from zipfile import ZipFile
 
 import requests
 
-from pokesprite.ansi import array_to_ansi_art_large
-from pokesprite.ansi import array_to_ansi_art_small
+from pokesprite.ansi import array_to_blocks_art_large
+from pokesprite.ansi import array_to_blocks_art_small
+from pokesprite.dots import array_to_dots_art
 from pokesprite.image import get_image_array
 
 
@@ -41,6 +42,64 @@ POKEMON_DATABASE_PATH = POKEMON_MODULE_DATA_ROOT / "pokemon.json"
 POKEMON_TXT_PATH = POKEMON_MODULE_DATA_ROOT / "txt"
 POKEMON_TXT_SMALL_PATH = POKEMON_TXT_PATH / "small"
 POKEMON_TXT_LARGE_PATH = POKEMON_TXT_PATH / "large"
+POKEMON_TXT_DOTS_PATH = POKEMON_TXT_PATH / "dots"
+
+
+def show_random_pokemon_sprite(
+    show_name: bool = False,  # noqa: FBT001, FBT002
+    style: Literal["blocks", "dots"] = "blocks",
+    size: Literal["small", "large"] = "small",
+    color: Literal["regular", "shiny"] = "regular",
+) -> None:
+    """
+    Display a random Pokémon form.
+
+    Args:
+        show_name (bool): Whether to display the Pokémon's name.
+        style (Literal["blocks", "dots"]): The style of the Pokémon sprite to show.
+        size (Literal["small", "large"]): The size of the Pokémon sprite to show.
+        color (Literal["regular", "shiny"]): The color variant of the Pokémon sprite.
+
+    Returns:
+        None
+
+    """
+    with POKEMON_DATABASE_PATH.open(mode="r", encoding="utf-8") as f:
+        data = json.load(f)  # pyright: ignore[reportAny]
+    forms = [*_get_pokemon_forms(data)]  # pyright: ignore[reportAny]
+    form = random.choice(forms)  # noqa: S311
+    show_pokemon_sprite(form, show_name, style, size, color)
+
+
+def show_pokemon_sprite(
+    form: str,
+    show_name: bool = False,  # noqa: FBT001, FBT002
+    style: Literal["blocks", "dots"] = "blocks",
+    size: Literal["small", "large"] = "small",
+    color: Literal["regular", "shiny"] = "regular",
+) -> None:
+    """
+    Display the ASCII art of a Pokémon form in the terminal.
+
+    Prints the form name (if show_name is True) and the corresponding ASCII art from a text file.
+
+    Args:
+        form (str): The name of the Pokémon form to display.
+        show_name (bool): Whether to print the form name before the art.
+        style (Literal["blocks", "dots"]): The style of the Pokémon sprite to show.
+        size (Literal["small", "large"]): The size of the art to display.
+        color (Literal["regular", "shiny"]): The color variant of the art.
+
+    Returns:
+        None
+
+
+    """
+    prefix = size if style == "blocks" else "dots"
+    with (POKEMON_TXT_PATH / prefix / color / f"{form}.txt").open(mode="r", encoding="utf-8") as f:
+        print(f.read(), end="")  # noqa: T201
+    if show_name:
+        print(form)  # noqa: T201
 
 
 def show_pokemon_list() -> None:
@@ -57,58 +116,6 @@ def show_pokemon_list() -> None:
         data = json.load(f)  # pyright: ignore[reportAny]
     for form in _get_pokemon_forms(data):  # pyright: ignore[reportAny]
         print(form)  # noqa: T201
-
-
-def show_random_pokemon_sprite(
-    show_name: bool = True,  # noqa: FBT001, FBT002
-    size: Literal["small", "large"] = "small",
-    color: Literal["regular", "shiny"] = "regular",
-) -> None:
-    """
-    Display a random Pokémon form.
-
-    Args:
-        show_name (bool): Whether to display the Pokémon's name.
-        size (Literal["small", "large"]): The size of the Pokémon sprite to show.
-        color (Literal["regular", "shiny"]): The color variant of the Pokémon sprite.
-
-    Returns:
-        None
-
-    """
-    with POKEMON_DATABASE_PATH.open(mode="r", encoding="utf-8") as f:
-        data = json.load(f)  # pyright: ignore[reportAny]
-    forms = [*_get_pokemon_forms(data)]  # pyright: ignore[reportAny]
-    form = random.choice(forms)  # noqa: S311
-    show_pokemon_sprite(form, show_name, size, color)
-
-
-def show_pokemon_sprite(
-    form: str,
-    show_name: bool = True,  # noqa: FBT001, FBT002
-    size: Literal["small", "large"] = "small",
-    color: Literal["regular", "shiny"] = "regular",
-) -> None:
-    """
-    Display the ASCII art of a Pokémon form in the terminal.
-
-    Prints the form name (if show_name is True) and the corresponding ASCII art from a text file.
-
-    Args:
-        form (str): The name of the Pokémon form to display.
-        show_name (bool): Whether to print the form name before the art.
-        size (Literal["small", "large"]): The size of the art to display.
-        color (Literal["regular", "shiny"]): The color variant of the art.
-
-    Returns:
-        None
-
-
-    """
-    if show_name:
-        print(form)  # noqa: T201
-    with (POKEMON_TXT_PATH / size / color / f"{form}.txt").open(mode="r", encoding="utf-8") as f:
-        print(f.read(), end="")  # noqa: T201
 
 
 def generate_pokemon_sprite_ansi_files() -> None:
@@ -142,12 +149,14 @@ def generate_pokemon_sprite_ansi_files() -> None:
             directory = _mkdir(POKEMON_SPRITES_PATH / color)
             txt_small_directory = _mkdir(POKEMON_TXT_SMALL_PATH / color)
             txt_large_directory = _mkdir(POKEMON_TXT_LARGE_PATH / color)
+            txt_dots_directory = _mkdir(POKEMON_TXT_DOTS_PATH / color)
             for form in forms:
                 generate_pokemon_sprite_ansi_file(
                     zdirectory / f"{form}.png",
                     directory / f"{form}.png",
                     txt_small_directory / f"{form}.txt",
                     txt_large_directory / f"{form}.txt",
+                    txt_dots_directory / f"{form}.txt",
                 )
 
 
@@ -267,12 +276,13 @@ def generate_pokemon_sprite_ansi_file(
     sprite_filename: Path,
     txt_filename_small: Path,
     txt_filename_large: Path,
+    txt_filename_dots: Path,
 ) -> None:
     """
-    Generate ANSI art files (small and large) from a sprite image inside a zip archive.
+    Generate ANSI art files (small, large and dots) from a sprite image inside a zip archive.
 
     Checks if the output text files already exist; if not, extracts the sprite image,
-    converts it to ANSI art in two formats (small and large), and writes the results
+    converts it to ANSI art in three formats (small, large and dots), and writes the results
     to the specified text files.
 
     Args:
@@ -280,6 +290,7 @@ def generate_pokemon_sprite_ansi_file(
         sprite_filename (Path): Path to the extracted sprite image.
         txt_filename_small (Path): Output path for the small ANSI art text file.
         txt_filename_large (Path): Output path for the large ANSI art text file.
+        txt_filename_dots (Path): Output path for the dots ANSI art text file.
 
     Returns:
         None
@@ -287,15 +298,21 @@ def generate_pokemon_sprite_ansi_file(
     """
     txt_small_exists = txt_filename_small.exists()
     txt_large_exists = txt_filename_large.exists()
-    if txt_small_exists and txt_large_exists:
+    txt_dots_exists = txt_filename_dots.exists()
+    if txt_small_exists and txt_large_exists and txt_dots_exists:
         return
     image_data = get_pokemon_sprite_data(zipped_filename, sprite_filename)
     image_array = get_image_array(image_data)
     if not txt_small_exists:
-        txt_small = array_to_ansi_art_small(image_array)
+        txt_small = array_to_blocks_art_small(image_array)
         with txt_filename_small.open(mode="w", encoding="utf-8") as f:
             _ = f.write(txt_small)
     if not txt_large_exists:
-        txt_large = array_to_ansi_art_large(image_array)
+        txt_large = array_to_blocks_art_large(image_array)
         with txt_filename_large.open(mode="w", encoding="utf-8") as f:
             _ = f.write(txt_large)
+    if not txt_dots_exists:
+        image_array = get_image_array(image_data, resize_factor=2)
+        txt_dots = array_to_dots_art(image_array)
+        with txt_filename_dots.open(mode="w", encoding="utf-8") as f:
+            _ = f.write(txt_dots)

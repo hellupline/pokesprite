@@ -15,7 +15,7 @@ SOLID_BLOCK = "██"
 WIDE_EMPTY_BLOCK = "  "
 
 
-def array_to_ansi_art_small(array: ImageArray) -> str:
+def array_to_blocks_art_small(array: ImageArray) -> str:
     """
     Convert a 2D image array into a string of ANSI art using half-block characters.
 
@@ -39,7 +39,7 @@ def array_to_ansi_art_small(array: ImageArray) -> str:
     return result + ANSI_RESET_CODE
 
 
-def array_to_ansi_art_large(array: ImageArray) -> str:
+def array_to_blocks_art_large(array: ImageArray) -> str:
     """
     Convert a 2D image array into a string of ANSI art using wide blocks.
 
@@ -76,8 +76,9 @@ def rows_pair(array: ImageArray) -> Iterable[tuple[ImageRowArray, ImageRowArray 
         array (ImageArray): An iterable of image row arrays.
 
     Returns:
-        Iterable[tuple[ImageRowArray, ImageRowArray | None]]: An iterable of tuples,
-        each containing two consecutive image row arrays.
+        Iterable[tuple[ImageRowArray, ImageRowArray | None]]:
+            An iterable of tuples,
+            each containing two consecutive image row arrays.
 
     Notes:
         - If the number of rows is odd, the last row will be omitted.

@@ -3,11 +3,11 @@ from argparse import ArgumentParser
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from typing import Literal
 
-import numpy as np
-
-from pokesprite.ansi import array_to_ansi_art_large
-from pokesprite.ansi import array_to_ansi_art_small
+from pokesprite.ansi import array_to_blocks_art_large
+from pokesprite.ansi import array_to_blocks_art_small
+from pokesprite.dots import array_to_dots_art
 from pokesprite.image import Box
 from pokesprite.image import Color
 from pokesprite.image import get_image_array
@@ -15,128 +15,133 @@ from pokesprite.pokemon import show_pokemon_list
 from pokesprite.pokemon import show_pokemon_sprite
 from pokesprite.pokemon import show_random_pokemon_sprite
 
-ImageArray = np.ndarray[tuple[int, int, int], np.dtype[np.uint8]]
-ImageRowArray = np.ndarray[tuple[int, int], np.dtype[np.uint8]]
-ImagePixelArray = np.ndarray[tuple[int], np.dtype[np.uint8]]
-
-
 argparser = ArgumentParser(
     prog="pokesprite",
     description="Generate ANSI art from Pokémon sprites.",
     usage="%(prog)s [options]",
 )
 _ = argparser.add_argument(
-    "--random",
-    help="Display a random Pokémon.",
-    action="store_true",
-    default=False,
-)
-_ = argparser.add_argument(
-    "--name",
-    help="Name of the Pokémon to display (e.g. 'ampharos' or 'ampharos-mega').",
-    action="store",
-    type=str,
-)
-_ = argparser.add_argument(
-    "--list",
-    help="List all available Pokémon forms.",
-    action="store_true",
-    default=False,
-)
-_ = argparser.add_argument(
-    "--show-name",
-    help="Show the name of the random Pokémon.",
-    action="store_true",
-    default=False,
-)
-_ = argparser.add_argument(
-    "--large",
-    help="Display the large version of the sprite (default: small).",
-    action="store_true",
-    default=False,
-)
-_ = argparser.add_argument(
-    "--shiny",
-    help="Display the shiny version of the sprite (default: regular).",
-    action="store_true",
-    default=False,
-)
-_ = argparser.add_argument(
     "--filename",
-    help="Filename of any image to display as ANSI art.",
-    action="store",
+    action="extend",
+    nargs="+",
     type=str,
+    help="Image files to convert to ansi art (e.g. 'image.png').",
+    dest="filenames",
 )
 _ = argparser.add_argument(
-    "--transparency-color-hex",
-    help="Set a specific RGB color as transparent in the image (format: AABBCC).",
+    "--style",
     action="store",
+    default="blocks",
     type=str,
+    choices=["blocks", "dots"],
+    help="art style to use: 'blocks' (default) or 'dots'.",
 )
 _ = argparser.add_argument(
     "--box-area",
-    help="Crop the image using the given left, upper, right, and lower pixel coordinates (format: LxUxRxD).",
     action="store",
     type=str,
+    help="Crop the image using the given left, upper, right, and lower pixel coordinates (format: LxUxRxD).",
+)
+_ = argparser.add_argument(
+    "--transparency-color-hex",
+    action="store",
+    type=str,
+    help="Set a specific RGB color as transparent in the image (format: AABBCC).",
+)
+_ = argparser.add_argument(
+    "--large",
+    action="store_true",
+    help="Display the image in large ANSI art (default is small, only valid for blocks style).",
+)
+_ = argparser.add_argument(
+    "--name",
+    action="store",
+    type=str,
+    help="Name of the Pokémon to display (e.g. 'ampharos' or 'ampharos-mega').",
+)
+_ = argparser.add_argument(
+    "--random",
+    action="store_true",
+    help="Display a random Pokémon.",
+)
+_ = argparser.add_argument(
+    "--list",
+    action="store_true",
+    help="List all available Pokémon forms.",
+)
+_ = argparser.add_argument(
+    "--shiny",
+    action="store_true",
+    help="Display the shiny version of the Pokémon (only valid with --name or --random).",
+)
+_ = argparser.add_argument(
+    "--show-name",
+    action="store_true",
+    help="Show the name of the random Pokémon.",
 )
 
 
 @dataclass()
 class Namespace:
     """
-    Represents configuration options for a sprite namespace.
+    Represents a namespace for command-line args.
 
     Attributes:
-        random (bool): Whether to select randomly.
-        name (str | None): The name of the namespace.
-        list (bool): Whether to display as a list.
-        show_name (bool): Whether to show the name.
-        large (bool): Whether to use large sprites.
-        shiny (bool): Whether to use shiny sprites.
-        filename (str | None): The filename associated with the namespace.
-        transparency_color (str | None): The transparency color in AABBCC format.
-        box_area (str | None): The area dimensions in LxUxRxD format.
+        filename (list[str] | None): List of filenames.
+        style (str | None): Art Style.
+        box_area (str | None): Box area to crop the image.
+        transparency_color_hex (str | None): Hex color code to mark as transparency color.
+        large (bool): Whether to display in large ANSI art.
+        name (str | None): Whether to select a Pokémon sprite.
+        random (bool): Whether to select a random Pokémon sprite.
+        list (bool): Whether to list all available Pokémon forms.
+        shiny (bool): Whether to use shiny Pokémon sprite.
+        show_name (bool): Whether to show the Pokémon name below the sprite.
 
     """
 
-    random: bool = False
-    name: str | None = None
-    list: bool = False
-    show_name: bool = False
-    large: bool = False
-    shiny: bool = False
-    filename: str | None = None
-    transparency_color_hex: str | None = None
+    filenames: list[str] | None = None
+    style: Literal["blocks", "dots"] = "blocks"
     box_area: str | None = None
+    transparency_color_hex: str | None = None
+    large: bool = False
+    name: str | None = None
+    random: bool = False
+    list: bool = False
+    shiny: bool = False
+    show_name: bool = False
 
 
 def main() -> None:
     """
-    Entry point for the pokesprite CLI application.
+    Entry point for the pokesprite CLI tool.
 
-    Parses command-line arguments and executes the corresponding action:
-        - Shows a random Pokémon if --random is specified.
-        - Shows a specific Pokémon if --name is provided.
-        - Lists all Pokémon if --list is specified.
-        - Displays a custom image if --filename is provided.
-        - Raises an error if no valid action is specified.
+    Parses command-line arguments, validates required inputs, and processes each input file
+    according to the selected style ('blocks' or 'dots'). Displays help and exits if no filenames
+    are provided.
 
-    Raises:
-        ValueError: If no action is specified.
-
+    Steps:
+        1. Parse arguments using argparser.
+        2. If no filenames are provided, print help and exit.
+        3. For each filename:
+            a. Parse box area and transparency color from arguments.
+            b. If style is 'blocks', call show_blocks with relevant parameters.
+            c. If style is 'dots', call show_dots with relevant parameters.
     """
     args = argparser.parse_args(namespace=Namespace())
-    if args.random:
-        show_random_pokemon_sprite(
-            args.show_name,
+    if args.name:
+        show_pokemon_sprite(
+            args.name,
+            show_name=args.show_name,
+            style=args.style,
             size="large" if args.large else "small",
             color="shiny" if args.shiny else "regular",
         )
         return
-    if args.name:
-        show_pokemon_sprite(
-            args.name,
-            args.show_name,
+    if args.random:
+        show_random_pokemon_sprite(
+            show_name=args.show_name,
+            style=args.style,
             size="large" if args.large else "small",
             color="shiny" if args.shiny else "regular",
         )
@@ -144,54 +149,89 @@ def main() -> None:
     if args.list:
         show_pokemon_list()
         return
-    if args.filename:
-        show_custom_image(
-            Path(args.filename),
-            transparency_color_hex=args.transparency_color_hex,
-            box_area_txt=args.box_area,
-            large=args.large,
-        )
+    if args.filenames:
+        for filename in map(Path, args.filenames):
+            box_area = parse_box_area_or_quit(args.box_area)
+            transparency_color = parse_color_hex_or_quit(args.transparency_color_hex)
+            if args.style == "blocks":
+                show_blocks(
+                    filename,
+                    box_area=box_area,
+                    transparency_color=transparency_color,
+                    large=args.large,
+                )
+            if args.style == "dots":
+                show_dots(
+                    filename,
+                    box_area=box_area,
+                    transparency_color=transparency_color,
+                )
         return
     argparser.print_help()
     sys.exit(1)
 
 
-def show_custom_image(
+def show_blocks(
     path: Path,
-    transparency_color_hex: str | None = None,
-    box_area_txt: str | None = None,
+    box_area: Box | None = None,
+    transparency_color: Color | None = None,
     large: bool = False,  # noqa: FBT001, FBT002
 ) -> None:
     """
-    Display a custom image in the terminal as ANSI art.
+    Display an image as ANSI art in the terminal.
 
     Args:
         path (Path): Path to the image file.
-        transparency_color_hex (str | None): Optional hex color string (AABBCC) for transparency.
-        box_area_txt (str | None): Optional crop area string in format 'LxUxRxD'.
-        large (bool): If True, displays the image in large ANSI art; otherwise, small.
+        box_area (Box | None, optional): Area of the image to display. Defaults to None.
+        transparency_color (Color | None, optional): Color to treat as transparent. Defaults to None.
+        large (bool, optional):
+            If True, displays the image in large ANSI art format.
+            If False, uses small format.
+            Defaults to False.
 
     Returns:
         None
 
-    Exits:
-        If color or crop parsing fails, prints an error and exits the program.
-
     """
-    transparency_color = parse_color_hex_or_quit(transparency_color_hex)
-    box_area = parse_box_area_or_quit(box_area_txt)
     with path.open(mode="rb") as f:
         image_data = BytesIO(f.read())
     image_array = get_image_array(
         image_data,
-        transparency_color=transparency_color,
         box_area=box_area,
+        transparency_color=transparency_color,
     )
     if large:
-        print(array_to_ansi_art_large(image_array), end="")  # noqa: T201
+        print(array_to_blocks_art_large(image_array), end="")  # noqa: T201
         return
-    print(array_to_ansi_art_small(image_array), end="")  # noqa: T201
-    return
+    print(array_to_blocks_art_small(image_array), end="")  # noqa: T201
+
+
+def show_dots(
+    path: Path,
+    box_area: Box | None = None,
+    transparency_color: Color | None = None,
+) -> None:
+    """
+    Display an image as dots art in the terminal.
+
+    Args:
+        path (Path): Path to the image file.
+        box_area (Box | None): Optional area to crop the image.
+        transparency_color (Color | None): Optional color to treat as transparent.
+
+    Returns:
+        None
+
+    """
+    with path.open(mode="rb") as f:
+        image_data = BytesIO(f.read())
+    image_array = get_image_array(
+        image_data,
+        resize_factor=2,
+        box_area=box_area,
+        transparency_color=transparency_color,
+    )
+    print(array_to_dots_art(image_array), end="")  # noqa: T201
 
 
 def parse_color_hex_or_quit(value: str | None) -> Color | None:

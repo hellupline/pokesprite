@@ -14,28 +14,41 @@ Box = tuple[int, int, int, int]
 
 def get_image_array(
     buf: IO[bytes],
-    transparency_color: Color | None = None,
+    resize_factor: int | None = None,
     box_area: Box | None = None,
+    transparency_color: Color | None = None,
 ) -> ImageArray:
     """
-    Load an image from a byte buffer.
+    Load and process an image from a byte buffer.
 
-    Processes its alpha channel, trims transparent edges, and returns the image as a NumPy array.
+    This function performs several operations:
+    - Loads the image from the provided byte buffer.
+    - Converts the image to RGBA format.
+    - Optionally crops the image to the specified box area.
+    - Optionally resizes the image by the given resize_factor.
+    - Optionally sets a specific color as transparent.
+    - Fixes the alpha channel of the image.
+    - Trims transparent edges from the image.
 
     Args:
-        buf (IO[bytes]): A buffer containing image data in bytes.
+        buf (IO[bytes]): Buffer containing image data in bytes.
+        resize_factor (int | None): Optional factor to resize the image dimensions.
+        box_area (Box | None): Optional box area (left, upper, right, lower) to crop the image.
         transparency_color (Color | None): Optional RGB color to set as transparent.
-        box_area (Box | None): Optional box area (left, upper, right, lower)
 
     Returns:
         ImageArray: The processed image as a NumPy array.
 
     """
-    array = np.array(Image.open(buf).convert("RGBA"))
+    image = Image.open(buf).convert("RGBA")
+    if box_area is not None:
+        image = image.crop(box_area)
+    if resize_factor is not None:
+        size = (image.width * resize_factor, image.height * resize_factor)
+        image = image.resize(size, resample=Image.Resampling.HAMMING)
+    array = np.array(image)
     if transparency_color is not None:
         array = set_transparent_color(array, color=transparency_color)
-    if box_area is not None:
-        array = crop_array(array, box_area=box_area)
     array = fix_alpha_channel(array)
     return trim_array(array)
 
@@ -52,25 +65,10 @@ def set_transparent_color(array: ImageArray, color: Color) -> ImageArray:
         ImageArray: Modified image array with specified color made transparent.
 
     """
-    mask = np.all(array[:, :, :3] == color, axis=-1)  # pyright: ignore[reportAny]
+    rgb = array[:, :, :3]
+    mask = np.all(rgb == color, axis=-1)  # pyright: ignore[reportAny]
     array[mask, 3] = 0
     return array
-
-
-def crop_array(array: ImageArray, box_area: Box) -> ImageArray:
-    """
-    Crops image to the specified box area.
-
-    Args:
-        array (ImageArray): The input image array to crop.
-        box_area (Box): A tuple (left, upper, right, lower) specifying the crop rectangle.
-
-    Returns:
-        ImageArray: The cropped image array.
-
-    """
-    left, upper, right, lower = box_area
-    return array[upper:lower, left:right]
 
 
 def fix_alpha_channel(array: ImageArray, threshold: int = TRANSPARENCY_THRESHOLD) -> ImageArray:
@@ -85,7 +83,8 @@ def fix_alpha_channel(array: ImageArray, threshold: int = TRANSPARENCY_THRESHOLD
         ImageArray: Modified image array with fixed alpha channel.
 
     """
-    mask = array[:, :, 3] < threshold
+    alpha = array[:, :, 3]
+    mask = alpha < threshold
     array[:, :, 3] = np.where(mask, 0, 255)
     return array
 
@@ -102,7 +101,8 @@ def trim_array(array: ImageArray, threshold: int = TRANSPARENCY_THRESHOLD) -> Im
         ImageArray: Cropped image array.
 
     """
-    mask = array[:, :, 3] > threshold
+    alpha = array[:, :, 3]
+    mask = alpha > threshold
     ys, xs = np.where(mask)
     y_min, y_max = ys.min(), ys.max()  # pyright: ignore[reportAny]
     x_min, x_max = xs.min(), xs.max()  # pyright: ignore[reportAny]
